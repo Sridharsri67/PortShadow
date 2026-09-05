@@ -1,5 +1,6 @@
 import { Connection, CONNECTION_STATES } from "../models/Connection.js";
 import { incarnationManager } from "./IncarnationManager.js";
+import { tombstoneStore } from "./TombstoneStore.js";
 
 export class ConnectionManager {
   constructor() {
@@ -88,9 +89,11 @@ export class ConnectionManager {
   }
 
   /**
-   * Close connection and free up the 4-tuple endpoint for rapid reuse.
+   * Close connection, create tombstone, and free up the 4-tuple endpoint for rapid reuse.
+   * @param {string} connectionId 
+   * @param {number} [tombstoneTtlMs=5000] 
    */
-  closeConnection(connectionId) {
+  closeConnection(connectionId, tombstoneTtlMs = 5000) {
     const connection = this.allConnections.get(connectionId);
     if (!connection) {
       throw new Error(`Connection not found: ${connectionId}`);
@@ -107,6 +110,9 @@ export class ConnectionManager {
 
     // Remove from active 4-tuple map so endpoint can be reused immediately
     this.activeConnections.delete(connection.tupleKey);
+
+    // Create Tombstone record preserving teardown state & old incarnation ID
+    tombstoneStore.createTombstone(connection, tombstoneTtlMs);
 
     return connection;
   }
@@ -132,6 +138,7 @@ export class ConnectionManager {
     this.activeConnections.clear();
     this.allConnections.clear();
     incarnationManager.reset();
+    tombstoneStore.reset();
   }
 }
 

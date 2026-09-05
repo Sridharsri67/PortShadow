@@ -1,6 +1,7 @@
 import { Router } from "express";
-import { connectionManager, incarnationManager, packetEngine, sequenceManager, packetValidator } from "../core/index.js";
+import { connectionManager, incarnationManager, packetEngine, sequenceManager, packetValidator, tombstoneStore } from "../core/index.js";
 import { networkSimulator } from "../network/index.js";
+import { runRapidReuseScenario } from "../scenarios/index.js";
 import { PACKET_STATUS } from "../models/Packet.js";
 
 const router = Router();
@@ -10,11 +11,12 @@ router.get("/status", (req, res) => {
   res.json({
     status: "online",
     system: "PortShadow — Incarnation-Aware Transport Simulator",
-    phase: 5,
-    phaseStatus: "Phase 5 Complete — Packet Validation Pipeline Active",
+    phase: 6,
+    phaseStatus: "Phase 6 Complete — Core MVP Tombstones & Rapid Reuse Active",
     activeConnectionsCount: connectionManager.getActiveConnections().length,
     packetsCreatedCount: packetEngine.getAllPackets().length,
-    delayedPacketsCount: networkSimulator.getDelayedPackets().length
+    delayedPacketsCount: networkSimulator.getDelayedPackets().length,
+    activeTombstonesCount: tombstoneStore.getAllTombstones().length
   });
 });
 
@@ -57,7 +59,8 @@ router.post("/connections", (req, res) => {
 
 router.post("/connections/:id/close", (req, res) => {
   try {
-    const connection = connectionManager.closeConnection(req.params.id);
+    const { tombstoneTtlMs = 5000 } = req.body || {};
+    const connection = connectionManager.closeConnection(req.params.id, tombstoneTtlMs);
     res.json(connection);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -76,6 +79,22 @@ router.post("/connections/:id/transition", (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+// ----------------------------------------------------
+// TOMBSTONES API
+// ----------------------------------------------------
+
+router.get("/tombstones", (req, res) => {
+  res.json(tombstoneStore.getAllTombstones());
+});
+
+router.get("/tombstones/:id", (req, res) => {
+  const tombstone = tombstoneStore.getTombstone(req.params.id);
+  if (!tombstone) {
+    return res.status(404).json({ error: "Tombstone not found or expired" });
+  }
+  res.json(tombstone);
 });
 
 // ----------------------------------------------------
@@ -119,7 +138,6 @@ router.post("/packets", (req, res) => {
   }
 });
 
-// POST /api/packets/:id/validate — Validate a packet through PacketValidator
 router.post("/packets/:id/validate", (req, res) => {
   try {
     const packet = packetEngine.getPacket(req.params.id);
@@ -156,7 +174,6 @@ router.post("/network/transmit", (req, res) => {
 router.post("/network/release/:packetId", (req, res) => {
   try {
     const releasedPacket = networkSimulator.releaseDelayedPacket(req.params.packetId);
-    // Auto-validate released packet at receiver
     const validationResult = packetValidator.validateAndProcess(releasedPacket);
     res.json({ releasedPacket, validationResult });
   } catch (err) {
@@ -169,6 +186,21 @@ router.get("/network/delayed", (req, res) => {
 });
 
 // ----------------------------------------------------
+// SCENARIOS API
+// ----------------------------------------------------
+
+// POST /api/scenarios/rapid-reuse — Run master Core MVP scenario
+router.post("/scenarios/rapid-reuse", (req, res) => {
+  try {
+    const { sourceIp, sourcePort, destinationIp, destinationPort, delayMs } = req.body || {};
+    const result = runRapidReuseScenario({ sourceIp, sourcePort, destinationIp, destinationPort, delayMs });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ----------------------------------------------------
 // RESET API
 // ----------------------------------------------------
 
@@ -177,6 +209,7 @@ router.post("/reset", (req, res) => {
   packetEngine.reset();
   networkSimulator.reset();
   packetValidator.reset();
+  tombstoneStore.reset();
   res.json({ message: "Simulation state reset successfully" });
 });
 
