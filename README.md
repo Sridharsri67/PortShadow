@@ -29,30 +29,50 @@ The simulator introduces an explicit **128-bit Incarnation ID** (`crypto.randomU
 
 ### A. High-Level System Architecture
 
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                        React + Vite Dashboard                          │
-│                (Visualizes Connections, Packets, Logs)                 │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ WebSockets (Socket.IO) & REST API
-┌───────────────────────────────────▼────────────────────────────────────┐
-│                    Node.js + Express Server Engine                     │
-│                                                                        │
-│  ┌───────────────────────────┐      ┌──────────────────────────────┐  │
-│  │     ConnectionManager     │      │      IncarnationManager      │  │
-│  │ (Lifecycle & 4-Tuple Map) │      │ (128-bit UUID Gen & Check)   │  │
-│  └─────────────┬─────────────┘      └──────────────┬───────────────┘  │
-│                │                                   │                  │
-│  ┌─────────────▼─────────────┐      ┌──────────────▼───────────────┐  │
-│  │       PacketEngine        │      │       SequenceManager        │  │
-│  │ (Factory & Status Engine) │      │ (Per-Connection Seq Numbers) │  │
-│  └─────────────┬─────────────┘      └──────────────┬───────────────┘  │
-│                │                                   │                  │
-│  ┌─────────────▼───────────────────────────────────▼───────────────┐  │
-│  │                      NetworkSimulator                           │  │
-│  │       (DelayEngine, ReorderEngine, DuplicateEngine, Drop)       │  │
-│  └─────────────────────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Frontend["Frontend Client (React 18 + Vite)"]
+        UI["React Dashboard & Control Panel"]
+        Zustand["State Store (Zustand / Hooks)"]
+        UI --- Zustand
+    end
+
+    subgraph Gateway["Real-Time & REST API Layer"]
+        WS["Socket.IO WebSockets Gateway"]
+        REST["Express REST API Routes"]
+    end
+
+    subgraph BackendCore["PortShadow Core Simulation Engine"]
+        CM["ConnectionManager<br/>(4-Tuple Mapping & Lifecycle)"]
+        IM["IncarnationManager<br/>(128-bit UUID Gen & Check)"]
+        PE["PacketEngine<br/>(Factory & Status Engine)"]
+        SM["SequenceManager<br/>(Per-Connection Transport Sequence)"]
+        TS["TombstoneStore<br/>(Teardown & Reuse Tracking)"]
+        PV["PacketValidator<br/>(Multi-Tier Incarnation Validator)"]
+
+        CM --> PE
+        IM --> PV
+        PE --> PV
+        SM --> PE
+        CM --> TS
+    end
+
+    subgraph NetworkLayer["Network Simulation Engine"]
+        NS["NetworkSimulator Engine"]
+        DE["DelayEngine (Latency / Stale Delay)"]
+        RE["ReorderEngine (Out-of-Order Delivery)"]
+        DUP["DuplicateEngine (Packet Duplication)"]
+        DROP["DropEngine (Packet Loss Simulation)"]
+
+        NS --> DE
+        NS --> RE
+        NS --> DUP
+        NS --> DROP
+    end
+
+    Frontend -->|Socket.IO Telemetry & REST| Gateway
+    Gateway --> BackendCore
+    BackendCore --> NetworkLayer
 ```
 
 ### B. Entity-Relationship (ER) Diagram & Data Model
@@ -120,23 +140,39 @@ erDiagram
 
 ### C. Deterministic Incarnation Isolation Sequence
 
-```text
-Connection A (Incarnation A7F91C2D)             Receiver (10.0.0.1:5000 -> 10.0.0.2:8080)
-      │                                                           │
-      ├────── Packet A1 [Seq 100, Incarnation A7F9] ─────────────►│ ACCEPTED
-      ├────── Packet A2 [Seq 101, Incarnation A7F9] ─┐            │
-      │                                            │ (DELAYED)    │
-      ├────── Packet A3 [Seq 102, Incarnation A7F9] ─────────────►│ ACCEPTED
-      │                                                           │
-Connection A Closes ──────────────────────────────────────────────┤ 4-Tuple Free
-                                                                  │
-Connection B (Incarnation C29D82F1) Reuses 4-Tuple               │
-      │                                                           │
-      ├────── Packet B1 [Seq 200, Incarnation C29D] ─────────────►│ ACCEPTED
-      │                                                           │
-Network Releases Delayed Packet A2 ──────────────────────────────►│ ❌ REJECTED (STALE_INCARNATION)
-      │                                                           │ (A7F9 !== C29D)
-      ├────── Packet B2 [Seq 201, Incarnation C29D] ─────────────►│ ACCEPTED
+```mermaid
+sequenceDiagram
+    autonumber
+    participant ConnA as Connection A (Incarnation: A7F91C2D)
+    participant Net as Network Simulator
+    participant Recv as Receiver (10.0.0.1:5000 -> 10.0.0.2:8080)
+    participant ConnB as Connection B (Incarnation: C29D82F1)
+
+    Note over ConnA,Recv: Phase 1: Connection A Active
+    ConnA->>Recv: Packet A1 [Seq 100, Incarnation A7F9]
+    Recv-->>ConnA: ACCEPTED (Active Incarnation Match)
+
+    ConnA->>Net: Packet A2 [Seq 101, Incarnation A7F9]
+    Note over Net: Network Delays Packet A2
+
+    ConnA->>Recv: Packet A3 [Seq 102, Incarnation A7F9]
+    Recv-->>ConnA: ACCEPTED (Active Incarnation Match)
+
+    Note over ConnA,Recv: Phase 2: Connection A Closes & 4-Tuple Reused
+    ConnA->>Recv: CLOSE Connection A
+    Note over Recv: 4-Tuple Released & Tombstone Created
+
+    Note over ConnB,Recv: Phase 3: Connection B Binds to Identical 4-Tuple
+    ConnB->>Recv: Packet B1 [Seq 200, Incarnation C29D]
+    Recv-->>ConnB: ACCEPTED (Active Incarnation Match)
+
+    Note over Net,Recv: Phase 4: Network Releases Delayed Packet A2
+    Net->>Recv: Packet A2 [Seq 101, Incarnation A7F9]
+    Note over Recv: Incarnation Check: A7F9 !== C29D
+    Recv-->>Recv: REJECTED (Reason: STALE_INCARNATION)
+
+    ConnB->>Recv: Packet B2 [Seq 201, Incarnation C29D]
+    Recv-->>ConnB: ACCEPTED (Active Incarnation Match)
 ```
 
 ---
@@ -145,27 +181,19 @@ Network Releases Delayed Packet A2 ───────────────
 
 PortShadow validates incoming simulated network traffic through a strict multi-tier evaluation pipeline before allowing any packet to modify receiver state.
 
-```text
-Incoming Packet
-      │
-      ▼
-[ Tier 1: 4-Tuple Lookup ]
-      │
-      ├── No Active Connection Found ──────► REJECT (Reason: UNKNOWN_CONNECTION)
-      │
-      ▼
-[ Tier 2: Incarnation ID Verification ]
-      │
-      ├── Packet Incarnation !== Active Incarnation ──► REJECT (Reason: STALE_INCARNATION)
-      │
-      ▼
-[ Tier 3: Sequence Number & Ordering ]
-      │
-      ├── Already Accepted Sequence ───────► MARK DUPLICATE (Deduplicated)
-      ├── Out-of-Order Sequence ───────────► BUFFER (Reorder Buffer)
-      │
-      ▼
-[ ACCEPT & UPDATE RECEIVER STATE ]
+```mermaid
+flowchart TD
+    Start([Incoming Packet Arrives at Receiver]) --> TupleCheck{"1. Active 4-Tuple Lookup"}
+
+    TupleCheck -- No Active Connection --> RejectUnknown["REJECT PACKET<br/>Reason: UNKNOWN_CONNECTION"]
+    TupleCheck -- Connection Found --> IncarnationCheck{"2. Incarnation ID Verification<br/>(packet.incarnationId === active.incarnationId)"}
+
+    IncarnationCheck -- Mismatch (Stale Incarnation) --> RejectStale["REJECT PACKET<br/>Reason: STALE_INCARNATION<br/>(Do Not Mutate State)"]
+    IncarnationCheck -- Match (Current Incarnation) --> SequenceCheck{"3. Sequence & Ordering Check"}
+
+    SequenceCheck -- Duplicate Sequence --> MarkDup["MARK DUPLICATE<br/>(Deduplicated)"]
+    SequenceCheck -- Future Out-of-Order Sequence --> BufferPacket["BUFFER PACKET<br/>(Reorder Queue)"]
+    SequenceCheck -- Expected Sequence --> AcceptPacket["ACCEPT PACKET<br/>(Update Receiver State)"]
 ```
 
 ### Primary Invariant
