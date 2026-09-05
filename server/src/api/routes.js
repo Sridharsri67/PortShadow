@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { connectionManager, incarnationManager, packetEngine, sequenceManager } from "../core/index.js";
+import { connectionManager, incarnationManager, packetEngine, sequenceManager, packetValidator } from "../core/index.js";
 import { networkSimulator } from "../network/index.js";
 import { PACKET_STATUS } from "../models/Packet.js";
 
@@ -10,8 +10,8 @@ router.get("/status", (req, res) => {
   res.json({
     status: "online",
     system: "PortShadow — Incarnation-Aware Transport Simulator",
-    phase: 4,
-    phaseStatus: "Phase 4 Complete — Network Simulator Operational",
+    phase: 5,
+    phaseStatus: "Phase 5 Complete — Packet Validation Pipeline Active",
     activeConnectionsCount: connectionManager.getActiveConnections().length,
     packetsCreatedCount: packetEngine.getAllPackets().length,
     delayedPacketsCount: networkSimulator.getDelayedPackets().length
@@ -119,11 +119,25 @@ router.post("/packets", (req, res) => {
   }
 });
 
+// POST /api/packets/:id/validate — Validate a packet through PacketValidator
+router.post("/packets/:id/validate", (req, res) => {
+  try {
+    const packet = packetEngine.getPacket(req.params.id);
+    if (!packet) {
+      return res.status(404).json({ error: `Packet not found: ${req.params.id}` });
+    }
+
+    const validationResult = packetValidator.validateAndProcess(packet);
+    res.json({ packet, validationResult });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ----------------------------------------------------
 // NETWORK SIMULATOR API
 // ----------------------------------------------------
 
-// POST /api/network/transmit — Transmit packet with network options (delayMs, drop, duplicate)
 router.post("/network/transmit", (req, res) => {
   try {
     const { packetId, delayMs = 0, drop = false, duplicate = false } = req.body;
@@ -139,17 +153,17 @@ router.post("/network/transmit", (req, res) => {
   }
 });
 
-// POST /api/network/release/:packetId — Release a delayed packet into receiver channel
 router.post("/network/release/:packetId", (req, res) => {
   try {
     const releasedPacket = networkSimulator.releaseDelayedPacket(req.params.packetId);
-    res.json(releasedPacket);
+    // Auto-validate released packet at receiver
+    const validationResult = packetValidator.validateAndProcess(releasedPacket);
+    res.json({ releasedPacket, validationResult });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-// GET /api/network/delayed — List currently delayed packets
 router.get("/network/delayed", (req, res) => {
   res.json(networkSimulator.getDelayedPackets());
 });
@@ -162,6 +176,7 @@ router.post("/reset", (req, res) => {
   connectionManager.reset();
   packetEngine.reset();
   networkSimulator.reset();
+  packetValidator.reset();
   res.json({ message: "Simulation state reset successfully" });
 });
 
