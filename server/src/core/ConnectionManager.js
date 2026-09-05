@@ -1,6 +1,7 @@
 import { Connection, CONNECTION_STATES } from "../models/Connection.js";
 import { incarnationManager } from "./IncarnationManager.js";
 import { tombstoneStore } from "./TombstoneStore.js";
+import { broadcastEvent, SOCKET_EVENTS } from "../websocket/socket.js";
 
 export class ConnectionManager {
   constructor() {
@@ -65,6 +66,8 @@ export class ConnectionManager {
     this.activeConnections.set(tupleKey, connection);
     this.allConnections.set(id, connection);
 
+    broadcastEvent(SOCKET_EVENTS.CONNECTION_CREATED, connection.toJSON());
+
     return connection;
   }
 
@@ -112,7 +115,12 @@ export class ConnectionManager {
     this.activeConnections.delete(connection.tupleKey);
 
     // Create Tombstone record preserving teardown state & old incarnation ID
-    tombstoneStore.createTombstone(connection, tombstoneTtlMs);
+    const tombstone = tombstoneStore.createTombstone(connection, tombstoneTtlMs);
+
+    broadcastEvent(SOCKET_EVENTS.CONNECTION_CLOSED, {
+      connectionId,
+      tombstone: tombstone ? tombstone.toJSON() : null
+    });
 
     return connection;
   }

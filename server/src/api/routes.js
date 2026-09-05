@@ -18,8 +18,8 @@ router.get("/status", (req, res) => {
   res.json({
     status: "online",
     system: "PortShadow — Incarnation-Aware Transport Simulator",
-    phase: 9,
-    phaseStatus: "Phase 9 Complete — Unit, Integration, & Property-Based (fast-check) Test Verification Active",
+    phase: 10,
+    phaseStatus: "Phase 10 Complete — Express REST APIs & Socket.IO Real-Time Telemetry Broadcasting Active",
     activeConnectionsCount: connectionManager.getActiveConnections().length,
     packetsCreatedCount: packetEngine.getAllPackets().length,
     delayedPacketsCount: networkSimulator.getDelayedPackets().length,

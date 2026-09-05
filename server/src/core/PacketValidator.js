@@ -1,5 +1,6 @@
 import { PACKET_STATUS, REJECTION_REASONS } from "../models/Packet.js";
 import { connectionManager as defaultConnectionManager } from "./ConnectionManager.js";
+import { broadcastEvent, SOCKET_EVENTS } from "../websocket/socket.js";
 
 export class PacketValidator {
   /**
@@ -51,11 +52,13 @@ export class PacketValidator {
 
     if (!activeConnection) {
       packet.setStatus(PACKET_STATUS.REJECTED, REJECTION_REASONS.UNKNOWN_CONNECTION);
-      return {
+      const res = {
         status: PACKET_STATUS.REJECTED,
         reason: REJECTION_REASONS.UNKNOWN_CONNECTION,
         activeConnectionId: null
       };
+      broadcastEvent(SOCKET_EVENTS.PACKET_REJECTED, { packet: packet.toJSON(), result: res });
+      return res;
     }
 
     // ---------------------------------------------------------------
@@ -64,11 +67,13 @@ export class PacketValidator {
     if (packet.incarnationId !== activeConnection.incarnationId) {
       // CRITICAL INVARIANT: DO NOT MUTATE activeConnection state!
       packet.setStatus(PACKET_STATUS.REJECTED, REJECTION_REASONS.STALE_INCARNATION);
-      return {
+      const res = {
         status: PACKET_STATUS.REJECTED,
         reason: REJECTION_REASONS.STALE_INCARNATION,
         activeConnectionId: activeConnection.connectionId
       };
+      broadcastEvent(SOCKET_EVENTS.PACKET_REJECTED, { packet: packet.toJSON(), result: res });
+      return res;
     }
 
     // ---------------------------------------------------------------
@@ -80,22 +85,26 @@ export class PacketValidator {
     // Duplicate Check: Already in accepted set or below expected window
     if (state.acceptedSequences.has(seq) || seq < state.expectedSeq) {
       packet.setStatus(PACKET_STATUS.DUPLICATE, "ALREADY_RECEIVED");
-      return {
+      const res = {
         status: PACKET_STATUS.DUPLICATE,
         reason: "ALREADY_RECEIVED",
         activeConnectionId: activeConnection.connectionId
       };
+      broadcastEvent(SOCKET_EVENTS.PACKET_ACCEPTED, { packet: packet.toJSON(), result: res });
+      return res;
     }
 
     // Out-of-Order Check: Future sequence number ahead of expected
     if (seq > state.expectedSeq) {
       packet.setStatus(PACKET_STATUS.BUFFERED, "OUT_OF_ORDER");
       state.buffer.set(seq, packet);
-      return {
+      const res = {
         status: PACKET_STATUS.BUFFERED,
         reason: "OUT_OF_ORDER",
         activeConnectionId: activeConnection.connectionId
       };
+      broadcastEvent(SOCKET_EVENTS.PACKET_ACCEPTED, { packet: packet.toJSON(), result: res });
+      return res;
     }
 
     // Expected Sequence Matched -> ACCEPT
@@ -106,11 +115,13 @@ export class PacketValidator {
     // Flush any buffered consecutive out-of-order packets
     this.flushBuffer(state);
 
-    return {
+    const res = {
       status: PACKET_STATUS.ACCEPTED,
       reason: "CURRENT_INCARNATION",
       activeConnectionId: activeConnection.connectionId
     };
+    broadcastEvent(SOCKET_EVENTS.PACKET_ACCEPTED, { packet: packet.toJSON(), result: res });
+    return res;
   }
 
   /**
