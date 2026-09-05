@@ -221,16 +221,16 @@ PortShadow maintains isolated environment files for both backend server and fron
 
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `PORT` | Yes | Express REST API server port | `5005` |
-| `CLIENT_URL` | Yes | Allowed CORS origin URL for client | `http://localhost:5173` |
+| `PORT` | Yes | Express REST API server port | `0000` |
+| `CLIENT_URL` | Yes | Allowed CORS origin URL for client | `http://localhost:0000` |
 | `NODE_ENV` | Yes | Environment mode (`development` / `production` / `test`) | `development` |
 
 ### Client (`client/.env`)
 
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `VITE_API_URL` | Yes | Backend REST API endpoint URL | `http://localhost:5005` |
-| `VITE_PORT` | Yes | Vite development server port | `5173` |
+| `VITE_API_URL` | Yes | Backend REST API endpoint URL | `http://localhost:0000` |
+| `VITE_PORT` | Yes | Vite development server port | `0000` |
 
 ---
 
@@ -249,13 +249,13 @@ cd PortShadow
 # Setup server environment file
 cat <<EOT > server/.env
 PORT=5005
-CLIENT_URL=http://localhost:5173
+CLIENT_URL=http://localhost:0000
 NODE_ENV=development
 EOT
 
 # Setup client environment file
 cat <<EOT > client/.env
-VITE_API_URL=http://localhost:5005
+VITE_API_URL=http://localhost:0000
 VITE_PORT=5173
 EOT
 ```
