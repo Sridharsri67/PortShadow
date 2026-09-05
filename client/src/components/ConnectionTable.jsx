@@ -1,7 +1,10 @@
 import React from "react";
 import { Server, Key, ArrowRight } from "lucide-react";
+import { useSimulationStore } from "../store/useSimulationStore";
 
-export function ConnectionTable({ connections = [] }) {
+export function ConnectionTable({ connections: propConns }) {
+  const storeConns = useSimulationStore((state) => state.connections);
+  const connections = propConns || storeConns || [];
   return (
     <div className="glass-card">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>

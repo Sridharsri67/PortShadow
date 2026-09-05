@@ -1,7 +1,10 @@
 import React from "react";
 import { Skull, Clock, ArrowRight } from "lucide-react";
+import { useSimulationStore } from "../store/useSimulationStore";
 
-export function TombstonePanel({ tombstones = [] }) {
+export function TombstonePanel({ tombstones: propTombstones }) {
+  const storeTombstones = useSimulationStore((state) => state.tombstones);
+  const tombstones = propTombstones || storeTombstones || [];
   return (
     <div className="glass-card">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>

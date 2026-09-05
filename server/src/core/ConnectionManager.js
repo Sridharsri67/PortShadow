@@ -2,6 +2,7 @@ import { Connection, CONNECTION_STATES } from "../models/Connection.js";
 import { incarnationManager } from "./IncarnationManager.js";
 import { tombstoneStore } from "./TombstoneStore.js";
 import { broadcastEvent, SOCKET_EVENTS } from "../websocket/socket.js";
+import { ConnectionRepository } from "../database/index.js";
 
 export class ConnectionManager {
   constructor() {
@@ -10,6 +11,9 @@ export class ConnectionManager {
 
     /** @type {Map<string, Connection>} Maps connectionId to Connection (active + closed) */
     this.allConnections = new Map();
+
+    /** @type {Map<string, number>} Maps 4-tuple key to generation count */
+    this.tupleGenerations = new Map();
   }
 
   /**
@@ -20,16 +24,18 @@ export class ConnectionManager {
   }
 
   /**
-   * Create a new connection with a unique 128-bit incarnation ID.
+   * Create a new connection with a unique 128-bit incarnation ID and generation count.
    */
-  createConnection({
-    connectionId,
-    sourceIp = "10.0.0.1",
-    sourcePort = 5000,
-    destinationIp = "10.0.0.2",
-    destinationPort = 8080,
-    autoEstablish = true
-  }) {
+  createConnection(options = {}) {
+    const {
+      connectionId,
+      sourceIp = "10.0.0.1",
+      sourcePort = 5000,
+      destinationIp = "10.0.0.2",
+      destinationPort = 8080,
+      autoEstablish = true,
+      generation: customGen
+    } = options;
     const tupleKey = ConnectionManager.getTupleKey(
       sourceIp,
       sourcePort,
@@ -46,8 +52,10 @@ export class ConnectionManager {
 
     const id = connectionId || `conn-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-    // Generate fresh incarnation ID via IncarnationManager
+    // Generate fresh incarnation ID & increment numeric generation
     const incarnation = incarnationManager.createIncarnation();
+    const generation = customGen || (this.tupleGenerations.get(tupleKey) || 0) + 1;
+    this.tupleGenerations.set(tupleKey, generation);
 
     const connection = new Connection({
       connectionId: id,
@@ -55,7 +63,8 @@ export class ConnectionManager {
       sourcePort,
       destinationIp,
       destinationPort,
-      incarnationId: incarnation.incarnationId
+      incarnationId: incarnation.incarnationId,
+      generation
     });
 
     if (autoEstablish) {
@@ -67,6 +76,7 @@ export class ConnectionManager {
     this.allConnections.set(id, connection);
 
     broadcastEvent(SOCKET_EVENTS.CONNECTION_CREATED, connection.toJSON());
+    ConnectionRepository.recordConnectionCreated(connection.toJSON()).catch(() => {});
 
     return connection;
   }
@@ -122,6 +132,8 @@ export class ConnectionManager {
       tombstone: tombstone ? tombstone.toJSON() : null
     });
 
+    ConnectionRepository.recordConnectionClosed(connectionId).catch(() => {});
+
     return connection;
   }
 
@@ -145,6 +157,7 @@ export class ConnectionManager {
   reset() {
     this.activeConnections.clear();
     this.allConnections.clear();
+    this.tupleGenerations.clear();
     incarnationManager.reset();
     tombstoneStore.reset();
   }

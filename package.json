@@ -18,5 +18,9 @@
     "concurrently": "^8.2.2",
     "fast-check": "^4.9.0",
     "vitest": "^1.6.1"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "prisma": "^5.22.0"
   }
 }

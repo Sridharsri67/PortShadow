@@ -37,8 +37,9 @@ export class Tombstone {
     return this.oldIncarnationId ? this.oldIncarnationId.slice(0, 8) : "";
   }
 
-  isExpired() {
-    return Date.now() > new Date(this.expiresAt).getTime();
+  isExpired(clock = null) {
+    const nowMs = clock && typeof clock.now === "function" ? clock.now() : Date.now();
+    return nowMs > new Date(this.expiresAt).getTime();
   }
 
   toJSON() {

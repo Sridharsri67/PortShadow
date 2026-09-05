@@ -25,6 +25,7 @@ export class Packet {
     destinationPort,
     connectionId,
     incarnationId,
+    generation = 1,
     sequenceNumber,
     payload = "DATA",
     createdAt = new Date().toISOString(),
@@ -45,7 +46,8 @@ export class Packet {
     this.destinationIp = destinationIp;
     this.destinationPort = Number(destinationPort);
     this.connectionId = connectionId;
-    this.incarnationId = incarnationId; // Inherited from connection
+    this.incarnationId = incarnationId;
+    this.generation = Number(generation); // Inherited from connection
     this.sequenceNumber = Number(sequenceNumber);
     this.payload = payload;
     this.createdAt = createdAt;
@@ -78,6 +80,7 @@ export class Packet {
       destinationPort: this.destinationPort,
       connectionId: this.connectionId,
       incarnationId: this.incarnationId,
+      generation: this.generation,
       sequenceNumber: this.sequenceNumber,
       payload: this.payload,
       createdAt: this.createdAt,

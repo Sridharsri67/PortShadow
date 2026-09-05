@@ -1,7 +1,10 @@
 import React from "react";
 import { Activity, ShieldAlert, ShieldCheck, Clock, Layers } from "lucide-react";
+import { useSimulationStore } from "../store/useSimulationStore";
 
-export function PacketTimeline({ packets = [] }) {
+export function PacketTimeline({ packets: propPackets }) {
+  const storePackets = useSimulationStore((state) => state.packets);
+  const packets = propPackets || storePackets || [];
   const getBadge = (status, reason) => {
     switch (status) {
       case "ACCEPTED":

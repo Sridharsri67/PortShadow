@@ -22,6 +22,7 @@ export class Connection {
     destinationIp = "10.0.0.2",
     destinationPort = 8080,
     incarnationId,
+    generation = 1,
     initialSequenceNumber = 100
   }) {
     if (!connectionId) {
@@ -37,6 +38,7 @@ export class Connection {
     this.destinationIp = destinationIp;
     this.destinationPort = Number(destinationPort);
     this.incarnationId = incarnationId;
+    this.generation = Number(generation);
     this.state = CONNECTION_STATES.NEW;
     this.sequenceNumber = initialSequenceNumber;
     this.createdAt = new Date().toISOString();
@@ -73,6 +75,7 @@ export class Connection {
       destinationIp: this.destinationIp,
       destinationPort: this.destinationPort,
       incarnationId: this.incarnationId,
+      generation: this.generation,
       state: this.state,
       sequenceNumber: this.sequenceNumber,
       createdAt: this.createdAt,

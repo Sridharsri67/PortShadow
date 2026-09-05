@@ -1,38 +1,44 @@
-import React, { useEffect, useState } from "react";
-import { Shield, Server, CheckCircle, Wifi, Activity } from "lucide-react";
+import React, { useEffect } from "react";
 import {
+  AppShell,
+  Hero,
+  SecurityStatus,
+  IsolationVisualization,
+  ManualTestPanel,
+  LiveActivity,
   ConnectionTable,
   PacketTimeline,
+  NetworkTopology,
+  NetworkControls,
   TombstonePanel,
+  ScenarioList,
+  ComparisonView,
   MetricsPanel,
-  SimulationControls
+  PerformancePanel
 } from "./components";
-import { getStatus, getConnections, getTombstones, getPackets, runScenario, resetSimulation } from "./services/api";
+import { getStatus, getConnections, getTombstones, getPackets } from "./services/api";
 import { useSocket } from "./hooks/useSocket";
+import { useSimulationStore } from "./store/useSimulationStore";
 
 export default function App() {
-  const [serverStatus, setServerStatus] = useState("Checking...");
-  const [connections, setConnections] = useState([]);
-  const [tombstones, setTombstones] = useState([]);
-  const [packets, setPackets] = useState([]);
-  const [comparisonData, setComparisonData] = useState(null);
-  const { isConnected, lastEvent } = useSocket();
+  const activeTab = useSimulationStore((state) => state.activeTab);
+  const setConnections = useSimulationStore((state) => state.setConnections);
+  const setTombstones = useSimulationStore((state) => state.setTombstones);
+  const setPackets = useSimulationStore((state) => state.setPackets);
+  const { lastEvent } = useSocket();
 
   const refreshData = async () => {
     try {
-      const statusRes = await getStatus();
-      setServerStatus(statusRes.phaseStatus || "Online");
-
-      const connRes = await getConnections();
+      const [connRes, tombRes, pktRes] = await Promise.all([
+        getConnections(),
+        getTombstones(),
+        getPackets()
+      ]);
       setConnections(connRes || []);
-
-      const tombRes = await getTombstones();
       setTombstones(tombRes || []);
-
-      const pktRes = await getPackets();
       setPackets(pktRes || []);
     } catch (err) {
-      setServerStatus("Offline / Connecting...");
+      console.error("Failed to fetch simulation data:", err);
     }
   };
 
@@ -48,66 +54,78 @@ export default function App() {
     }
   }, [lastEvent]);
 
-  const handleRunScenario = async (scenarioName) => {
-    const result = await runScenario(scenarioName);
-    if (scenarioName === "comparison") {
-      setComparisonData(result);
-    }
-    await refreshData();
-  };
+  const renderContent = () => {
+    switch (activeTab) {
+      case "connections":
+        return <ConnectionTable />;
 
-  const handleReset = async () => {
-    await resetSimulation();
-    setComparisonData(null);
-    await refreshData();
-  };
+      case "packets":
+        return <PacketTimeline />;
 
-  return (
-    <div className="container" style={{ paddingBottom: "3rem" }}>
-      {/* Header */}
-      <header style={{ marginBottom: "2rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
-            <Shield style={{ color: "#38bdf8", width: "2.25rem", height: "2.25rem" }} />
-            <h1 className="title-glow" style={{ fontSize: "2.25rem", fontWeight: "700", letterSpacing: "-0.02em" }}>
-              PortShadow
-            </h1>
+      case "network":
+        return (
+          <>
+            <NetworkTopology />
+            <NetworkControls />
+          </>
+        );
+
+      case "scenarios":
+        return (
+          <>
+            <ManualTestPanel />
+            <ScenarioList />
+          </>
+        );
+
+      case "isolation":
+        return <IsolationVisualization />;
+
+      case "comparison":
+        return <ComparisonView />;
+
+      case "tombstones":
+        return <TombstonePanel />;
+
+      case "metrics":
+        return (
+          <>
+            <MetricsPanel />
+            <PerformancePanel />
+          </>
+        );
+
+      case "docs":
+        return (
+          <div className="panel font-mono" style={{ lineHeight: "1.6" }}>
+            <h2 style={{ fontSize: "1.25rem", color: "var(--text-primary)", marginBottom: "1rem" }}>
+              PORTSHADOW ARCHITECTURE SPECIFICATION
+            </h2>
+            <p style={{ color: "var(--text-secondary)", marginBottom: "1rem" }}>
+              PortShadow prevents delayed transport-layer packets from modifying active connection state following rapid 4-tuple endpoint reuse.
+            </p>
+            <ul style={{ color: "var(--text-muted)", paddingLeft: "1.2rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <li><strong>128-bit UUID Incarnation ID:</strong> Cryptographically generated per connection lifetime.</li>
+              <li><strong>Zero State Mutation Invariant:</strong> Incoming packets with stale Incarnation IDs are discarded without mutating receiver sequence windows.</li>
+              <li><strong>Teardown Tombstones:</strong> Retains 5-second TTL historical markers for closed connections.</li>
+            </ul>
           </div>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.95rem" }}>
-            Incarnation-Aware Transport Isolation Engine & Security Dashboard
-          </p>
-        </div>
+        );
 
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-          <span className="badge badge-indigo">
-            <Server style={{ width: "0.875rem", height: "0.875rem" }} /> {serverStatus}
-          </span>
-          <span className={`badge ${isConnected ? "badge-emerald" : "badge-rose"}`}>
-            <Wifi style={{ width: "0.875rem", height: "0.875rem" }} /> {isConnected ? "Live Telemetry" : "Connecting WS"}
-          </span>
-        </div>
-      </header>
+      case "overview":
+      default:
+        return (
+          <>
+            <Hero />
+            <IsolationVisualization />
+            <ManualTestPanel />
+            <ConnectionTable />
+            <PacketTimeline />
+            <LiveActivity />
+          </>
+        );
+    }
+  };
 
-      {/* Simulation Controls */}
-      <div style={{ marginBottom: "1.5rem" }}>
-        <SimulationControls onRunScenario={handleRunScenario} onReset={handleReset} />
-      </div>
-
-      {/* Analytics & Metrics */}
-      <div style={{ marginBottom: "1.5rem" }}>
-        <MetricsPanel comparisonData={comparisonData} />
-      </div>
-
-      {/* Grid: Connection Table & Tombstone Panel */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: "1.5rem", marginBottom: "1.5rem" }}>
-        <ConnectionTable connections={connections} />
-        <TombstonePanel tombstones={tombstones} />
-      </div>
-
-      {/* Packet Stream Timeline */}
-      <div>
-        <PacketTimeline packets={packets} />
-      </div>
-    </div>
-  );
+  return <AppShell>{renderContent()}</AppShell>;
 }

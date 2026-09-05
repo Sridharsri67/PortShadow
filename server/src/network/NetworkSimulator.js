@@ -3,6 +3,7 @@ import { reorderEngine } from "./ReorderEngine.js";
 import { duplicateEngine } from "./DuplicateEngine.js";
 import { dropEngine } from "./DropEngine.js";
 import { PACKET_STATUS } from "../models/Packet.js";
+import { SeedableRandom, systemRandom } from "../core/Random.js";
 
 export class NetworkSimulator {
   constructor() {
@@ -10,9 +11,18 @@ export class NetworkSimulator {
     this.reorderEngine = reorderEngine;
     this.duplicateEngine = duplicateEngine;
     this.dropEngine = dropEngine;
+    this.random = systemRandom;
 
     /** @type {Array<import("../models/Packet.js").Packet>} Network audit log of transmitted/processed packets */
     this.transitLog = [];
+  }
+
+  /**
+   * Set deterministic PRNG seed for exact scenario replayability.
+   * @param {number} seed 
+   */
+  setSeed(seed) {
+    this.random = new SeedableRandom(seed);
   }
 
   /**

@@ -10,6 +10,13 @@ import {
   runComparisonScenario
 } from "../scenarios/index.js";
 import { PACKET_STATUS } from "../models/Packet.js";
+import {
+  isDatabaseConnected,
+  ConnectionRepository,
+  PacketEventRepository,
+  ScenarioRepository,
+  BenchmarkRepository
+} from "../database/index.js";
 
 const router = Router();
 
@@ -251,6 +258,64 @@ router.post("/scenarios/comparison", (req, res) => {
     const { sourceIp, sourcePort, destinationIp, destinationPort, maxNaiveAgeMs } = req.body || {};
     const result = runComparisonScenario({ sourceIp, sourcePort, destinationIp, destinationPort, maxNaiveAgeMs });
     res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ----------------------------------------------------
+// DATABASE & PACKET PROVENANCE API
+// ----------------------------------------------------
+
+router.get("/db/status", (req, res) => {
+  res.json({
+    connected: isDatabaseConnected(),
+    provider: isDatabaseConnected() ? "Neon PostgreSQL (Prisma)" : "In-Memory Provenance Buffer",
+    hasDatabaseUrl: Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== "")
+  });
+});
+
+router.get("/db/provenance", async (req, res) => {
+  try {
+    const { packetId, connectionId, status, rejectionReason, limit = 100 } = req.query;
+    const records = await PacketEventRepository.getProvenanceRecords(
+      { packetId, connectionId, status, rejectionReason },
+      Number(limit)
+    );
+    res.json({
+      count: records.length,
+      provenanceRecords: records
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/db/connections", async (req, res) => {
+  try {
+    const { limit = 100 } = req.query;
+    const records = await ConnectionRepository.getAllConnections(Number(limit));
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/db/scenarios", async (req, res) => {
+  try {
+    const { limit = 50 } = req.query;
+    const records = await ScenarioRepository.getScenarioRuns(Number(limit));
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/db/benchmarks", async (req, res) => {
+  try {
+    const { limit = 50 } = req.query;
+    const records = await BenchmarkRepository.getBenchmarkResults(Number(limit));
+    res.json(records);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

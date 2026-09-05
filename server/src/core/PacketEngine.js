@@ -36,6 +36,7 @@ export class PacketEngine {
       destinationPort: connection.destinationPort,
       connectionId: connection.connectionId,
       incarnationId: connection.incarnationId,
+      generation: connection.generation || 1,
       sequenceNumber: seq,
       payload,
       status

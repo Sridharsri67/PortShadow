@@ -1,6 +1,7 @@
 import { PACKET_STATUS, REJECTION_REASONS } from "../models/Packet.js";
 import { connectionManager as defaultConnectionManager } from "./ConnectionManager.js";
 import { broadcastEvent, SOCKET_EVENTS } from "../websocket/socket.js";
+import { PacketEventRepository } from "../database/index.js";
 
 export class PacketValidator {
   /**
@@ -58,6 +59,7 @@ export class PacketValidator {
         activeConnectionId: null
       };
       broadcastEvent(SOCKET_EVENTS.PACKET_REJECTED, { packet: packet.toJSON(), result: res });
+      this._recordProvenance(packet);
       return res;
     }
 
@@ -73,6 +75,7 @@ export class PacketValidator {
         activeConnectionId: activeConnection.connectionId
       };
       broadcastEvent(SOCKET_EVENTS.PACKET_REJECTED, { packet: packet.toJSON(), result: res });
+      this._recordProvenance(packet);
       return res;
     }
 
@@ -91,6 +94,7 @@ export class PacketValidator {
         activeConnectionId: activeConnection.connectionId
       };
       broadcastEvent(SOCKET_EVENTS.PACKET_ACCEPTED, { packet: packet.toJSON(), result: res });
+      this._recordProvenance(packet);
       return res;
     }
 
@@ -104,6 +108,7 @@ export class PacketValidator {
         activeConnectionId: activeConnection.connectionId
       };
       broadcastEvent(SOCKET_EVENTS.PACKET_ACCEPTED, { packet: packet.toJSON(), result: res });
+      this._recordProvenance(packet);
       return res;
     }
 
@@ -121,7 +126,31 @@ export class PacketValidator {
       activeConnectionId: activeConnection.connectionId
     };
     broadcastEvent(SOCKET_EVENTS.PACKET_ACCEPTED, { packet: packet.toJSON(), result: res });
+    this._recordProvenance(packet);
     return res;
+  }
+
+  /**
+   * Helper to asynchronously log packet provenance record to database / fallback store.
+   */
+  _recordProvenance(packet) {
+    PacketEventRepository.recordPacketEvent({
+      packetId: packet.packetId,
+      connectionId: packet.connectionId,
+      incarnationId: packet.incarnationId,
+      generation: packet.generation || 1,
+      sequenceNumber: packet.sequenceNumber,
+      sourceIp: packet.sourceIp,
+      sourcePort: packet.sourcePort,
+      destinationIp: packet.destinationIp,
+      destinationPort: packet.destinationPort,
+      payload: packet.payload,
+      eventType: "VALIDATION",
+      status: packet.status,
+      rejectionReason: packet.rejectionReason,
+      createdAt: packet.createdAt,
+      deliveredAt: packet.deliveryAt || new Date().toISOString()
+    }).catch(() => {});
   }
 
   /**

@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
+import { useSimulationStore } from "../store/useSimulationStore";
 
 export function useSocket() {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState(null);
+  const addToast = useSimulationStore((state) => state.addToast);
+  const addPacketEvent = useSimulationStore((state) => state.addPacketEvent);
 
   useEffect(() => {
     const socketIo = io("/", {
@@ -20,22 +23,35 @@ export function useSocket() {
       setIsConnected(false);
     });
 
-    // Listen to all telemetry events
-    const events = [
-      "connection:created",
-      "connection:closed",
-      "packet:sent",
-      "packet:delayed",
-      "packet:released",
-      "packet:accepted",
-      "packet:rejected",
-      "tombstone:created"
-    ];
+    socketIo.on("connection:created", (data) => {
+      setLastEvent({ name: "connection:created", payload: data });
+      addToast(`Connection Created: ${data.data?.connectionId || "Active"}`);
+    });
 
-    events.forEach((evt) => {
-      socketIo.on(evt, (data) => {
-        setLastEvent({ name: evt, payload: data, timestamp: new Date().toLocaleTimeString() });
-      });
+    socketIo.on("connection:closed", (data) => {
+      setLastEvent({ name: "connection:closed", payload: data });
+      addToast(`Connection Teardown: ${data.data?.connectionId}`, "warning");
+    });
+
+    socketIo.on("packet:accepted", (data) => {
+      setLastEvent({ name: "packet:accepted", payload: data });
+      if (data.data?.packet) {
+        addPacketEvent(data.data.packet);
+      }
+    });
+
+    socketIo.on("packet:rejected", (data) => {
+      setLastEvent({ name: "packet:rejected", payload: data });
+      if (data.data?.packet) {
+        addPacketEvent(data.data.packet);
+        if (data.data.packet.rejectionReason === "STALE_INCARNATION") {
+          addToast(`🔒 Stale Packet Rejected: ${data.data.packet.packetId} (${data.data.packet.incarnationId.slice(0, 8)})`, "error");
+        }
+      }
+    });
+
+    socketIo.on("tombstone:created", (data) => {
+      setLastEvent({ name: "tombstone:created", payload: data });
     });
 
     setSocket(socketIo);
@@ -43,7 +59,7 @@ export function useSocket() {
     return () => {
       socketIo.disconnect();
     };
-  }, []);
+  }, [addToast, addPacketEvent]);
 
   return { socket, isConnected, lastEvent };
 }
