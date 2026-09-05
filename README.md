@@ -381,9 +381,60 @@ PortShadow/
 | `retransmission` | Distinguishes legitimate retransmissions of current incarnation packets from stale delayed packets. |
 | `reordering` | Demonstrates out-of-order buffering for current incarnation vs rejection for stale incarnation. |
 | `duplicate-packet` | Tests sequence deduplication for duplicated packets within the active connection lifetime. |
+| `comparison` | Runs Naive age-based filter vs PortShadow incarnation-aware filter side-by-side to highlight security vulnerabilities (False Acceptances) and packet loss (False Rejections). |
+
+---
+
+## 9. Production Deployment Guide (Vercel, Render & Neon DB)
+
+PortShadow is architected for cloud deployment across Vercel, Render, and Neon DB.
+
+```text
+┌────────────────────────────────┐
+│   Vercel (React Frontend)      │
+└───────────────┬────────────────┘
+                │ REST / WebSockets (Socket.IO)
+                ▼
+┌────────────────────────────────┐
+│   Render (Node.js + Express)   │
+└───────────────┬────────────────┘
+                │ Managed PostgreSQL Connection
+                ▼
+┌────────────────────────────────┐
+│   Neon DB (Serverless Postgres)│
+└────────────────────────────────┘
+```
+
+### A. Frontend Deployment — Vercel
+- **Framework Preset**: Vite
+- **Build Command**: `npm run build --workspace=client`
+- **Output Directory**: `client/dist`
+- **Configuration**: Uses [`vercel.json`](file:///Users/sridharkonda/Documents/PortShadow/vercel.json) with API proxy rewrites to Render backend.
+- **Environment Variables**:
+  - `VITE_API_URL`: `https://portshadow`
+
+### B. Backend Deployment — Render
+- **Environment**: Node.js
+- **Build Command**: `npm install --workspace=server`
+- **Start Command**: `npm run start --workspace=server`
+- **Configuration**: Uses [`render.yaml`](file:///Users/sridharkonda/Documents/PortShadow/render.yaml) for automatic web service provisioning.
+- **Environment Variables**:
+  - `PORT`: `00000`
+  - `NODE_ENV`: `production`
+  - `CLIENT_URL`: `https://portshadow`
+  - `DATABASE_URL`: Managed Neon PostgreSQL SSL Connection String
+
+### C. Managed Database Deployment — Neon DB
+- **Platform**: Neon Serverless PostgreSQL
+- **Connection Protocol**: PostgreSQL over TLS/SSL (`?sslmode=require`)
+- **Connection Format**:
+  ```text
+  DATABASE_URL="postgresql://neondb_owner:npg_secret@ep-cool-sample-a5xyz.us-east"
+  ```
 
 ---
 
 ## License
 
 Distributed under the MIT License. See `LICENSE` for details.
+
