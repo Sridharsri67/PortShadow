@@ -2,6 +2,11 @@
 
 > An incarnation-aware transport-layer simulation engine that safely isolates delayed packets from previous connection incarnations after rapid endpoint/port reuse.
 
+[![Architecture Decisions](https://img.shields.io/badge/Architecture-DECISIONS.md-blue.svg)](DECISIONS.md)
+[![Execution Flow](https://img.shields.io/badge/Telemetry-FLOW.md-green.svg)](FLOW.md)
+[![Security Policy](https://img.shields.io/badge/Security-SECURITY.md-red.svg)](SECURITY.md)
+[![Troubleshooting Guide](https://img.shields.io/badge/Diagnostics-DEBUGGING.md-orange.svg)](DEBUGGING.md)
+
 ---
 
 ## Table of Contents

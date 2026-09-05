@@ -1,7 +1,14 @@
 import { Router } from "express";
 import { connectionManager, incarnationManager, packetEngine, sequenceManager, packetValidator, tombstoneStore } from "../core/index.js";
 import { networkSimulator } from "../network/index.js";
-import { runRapidReuseScenario } from "../scenarios/index.js";
+import {
+  runRapidReuseScenario,
+  runRetransmissionScenario,
+  runReorderingScenario,
+  runDuplicatePacketScenario,
+  runMixedTrafficScenario,
+  runComparisonScenario
+} from "../scenarios/index.js";
 import { PACKET_STATUS } from "../models/Packet.js";
 
 const router = Router();
@@ -11,8 +18,8 @@ router.get("/status", (req, res) => {
   res.json({
     status: "online",
     system: "PortShadow — Incarnation-Aware Transport Simulator",
-    phase: 6,
-    phaseStatus: "Phase 6 Complete — Core MVP Tombstones & Rapid Reuse Active",
+    phase: 8,
+    phaseStatus: "Phase 8 Complete — Naive vs PortShadow Comparison Engine Active",
     activeConnectionsCount: connectionManager.getActiveConnections().length,
     packetsCreatedCount: packetEngine.getAllPackets().length,
     delayedPacketsCount: networkSimulator.getDelayedPackets().length,
@@ -189,11 +196,60 @@ router.get("/network/delayed", (req, res) => {
 // SCENARIOS API
 // ----------------------------------------------------
 
-// POST /api/scenarios/rapid-reuse — Run master Core MVP scenario
 router.post("/scenarios/rapid-reuse", (req, res) => {
   try {
     const { sourceIp, sourcePort, destinationIp, destinationPort, delayMs } = req.body || {};
     const result = runRapidReuseScenario({ sourceIp, sourcePort, destinationIp, destinationPort, delayMs });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/scenarios/retransmission", (req, res) => {
+  try {
+    const { sourceIp, sourcePort, destinationIp, destinationPort } = req.body || {};
+    const result = runRetransmissionScenario({ sourceIp, sourcePort, destinationIp, destinationPort });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/scenarios/reordering", (req, res) => {
+  try {
+    const { sourceIp, sourcePort, destinationIp, destinationPort } = req.body || {};
+    const result = runReorderingScenario({ sourceIp, sourcePort, destinationIp, destinationPort });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/scenarios/duplicate", (req, res) => {
+  try {
+    const { sourceIp, sourcePort, destinationIp, destinationPort } = req.body || {};
+    const result = runDuplicatePacketScenario({ sourceIp, sourcePort, destinationIp, destinationPort });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/scenarios/mixed", (req, res) => {
+  try {
+    const { sourceIp, sourcePort, destinationIp, destinationPort } = req.body || {};
+    const result = runMixedTrafficScenario({ sourceIp, sourcePort, destinationIp, destinationPort });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/scenarios/comparison", (req, res) => {
+  try {
+    const { sourceIp, sourcePort, destinationIp, destinationPort, maxNaiveAgeMs } = req.body || {};
+    const result = runComparisonScenario({ sourceIp, sourcePort, destinationIp, destinationPort, maxNaiveAgeMs });
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });

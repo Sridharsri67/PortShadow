@@ -1,0 +1,2 @@
+// Client components placeholder
+export {};

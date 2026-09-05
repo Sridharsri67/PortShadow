@@ -1,0 +1,21 @@
+{
+  "name": "portshadow",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "build:client": "npm run build --workspace=client",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "vitest": "^1.6.1"
+  }
+}

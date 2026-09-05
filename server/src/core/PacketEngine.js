@@ -17,7 +17,8 @@ export class PacketEngine {
     connection,
     packetId = null,
     payload = "DATA",
-    status = PACKET_STATUS.CREATED
+    status = PACKET_STATUS.CREATED,
+    createdAt = null
   }) {
     if (!connection) {
       throw new Error("Cannot create packet without a valid connection instance");
@@ -27,7 +28,7 @@ export class PacketEngine {
     const seq = sequenceManager.getNextSequenceNumber(connection.connectionId, connection.sequenceNumber);
 
     // Create packet — INHERITS connection.incarnationId
-    const packet = new Packet({
+    const packetOpts = {
       packetId: id,
       sourceIp: connection.sourceIp,
       sourcePort: connection.sourcePort,
@@ -38,7 +39,13 @@ export class PacketEngine {
       sequenceNumber: seq,
       payload,
       status
-    });
+    };
+
+    if (createdAt) {
+      packetOpts.createdAt = createdAt;
+    }
+
+    const packet = new Packet(packetOpts);
 
     this.packets.set(id, packet);
     return packet;
