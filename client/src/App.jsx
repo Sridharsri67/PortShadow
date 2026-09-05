@@ -1,72 +1,113 @@
 import React, { useEffect, useState } from "react";
-import { Shield, Server, Activity, CheckCircle, Wifi } from "lucide-react";
+import { Shield, Server, CheckCircle, Wifi, Activity } from "lucide-react";
+import {
+  ConnectionTable,
+  PacketTimeline,
+  TombstonePanel,
+  MetricsPanel,
+  SimulationControls
+} from "./components";
+import { getStatus, getConnections, getTombstones, getPackets, runScenario, resetSimulation } from "./services/api";
+import { useSocket } from "./hooks/useSocket";
 
 export default function App() {
   const [serverStatus, setServerStatus] = useState("Checking...");
-  const [wsStatus, setWsStatus] = useState("Disconnected");
+  const [connections, setConnections] = useState([]);
+  const [tombstones, setTombstones] = useState([]);
+  const [packets, setPackets] = useState([]);
+  const [comparisonData, setComparisonData] = useState(null);
+  const { isConnected, lastEvent } = useSocket();
+
+  const refreshData = async () => {
+    try {
+      const statusRes = await getStatus();
+      setServerStatus(statusRes.phaseStatus || "Online");
+
+      const connRes = await getConnections();
+      setConnections(connRes || []);
+
+      const tombRes = await getTombstones();
+      setTombstones(tombRes || []);
+
+      const pktRes = await getPackets();
+      setPackets(pktRes || []);
+    } catch (err) {
+      setServerStatus("Offline / Connecting...");
+    }
+  };
 
   useEffect(() => {
-    fetch("/api/status")
-      .then((res) => res.json())
-      .then((data) => {
-        setServerStatus(data.phaseStatus || "Online");
-      })
-      .catch((err) => {
-        setServerStatus("Offline / Connecting...");
-      });
+    refreshData();
+    const interval = setInterval(refreshData, 3000);
+    return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (lastEvent) {
+      refreshData();
+    }
+  }, [lastEvent]);
+
+  const handleRunScenario = async (scenarioName) => {
+    const result = await runScenario(scenarioName);
+    if (scenarioName === "comparison") {
+      setComparisonData(result);
+    }
+    await refreshData();
+  };
+
+  const handleReset = async () => {
+    await resetSimulation();
+    setComparisonData(null);
+    await refreshData();
+  };
+
   return (
-    <div className="container">
-      <header style={{ marginBottom: "2.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <div className="container" style={{ paddingBottom: "3rem" }}>
+      {/* Header */}
+      <header style={{ marginBottom: "2rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
-            <Shield style={{ color: "#38bdf8", width: "2rem", height: "2rem" }} />
-            <h1 className="title-glow" style={{ fontSize: "2rem", fontWeight: "700", letterSpacing: "-0.02em" }}>
+            <Shield style={{ color: "#38bdf8", width: "2.25rem", height: "2.25rem" }} />
+            <h1 className="title-glow" style={{ fontSize: "2.25rem", fontWeight: "700", letterSpacing: "-0.02em" }}>
               PortShadow
             </h1>
           </div>
           <p style={{ color: "var(--text-muted)", fontSize: "0.95rem" }}>
-            Delayed Packet Isolation After Transport-Port Reuse
+            Incarnation-Aware Transport Isolation Engine & Security Dashboard
           </p>
         </div>
-        <div style={{ display: "flex", gap: "0.75rem" }}>
+
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
           <span className="badge badge-indigo">
-            <Server style={{ width: "0.875rem", height: "0.875rem" }} /> Phase 1 Setup
+            <Server style={{ width: "0.875rem", height: "0.875rem" }} /> {serverStatus}
           </span>
-          <span className="badge badge-emerald">
-            <CheckCircle style={{ width: "0.875rem", height: "0.875rem" }} /> System Ready
+          <span className={`badge ${isConnected ? "badge-emerald" : "badge-rose"}`}>
+            <Wifi style={{ width: "0.875rem", height: "0.875rem" }} /> {isConnected ? "Live Telemetry" : "Connecting WS"}
           </span>
         </div>
       </header>
 
-      <main style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1.5rem" }}>
-        <div className="glass-card">
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
-            <Activity style={{ color: "#10b981", width: "1.25rem", height: "1.25rem" }} />
-            <h3 style={{ fontSize: "1.1rem", fontWeight: "600" }}>Backend Service Status</h3>
-          </div>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginBottom: "1rem" }}>
-            Express backend health status and REST endpoint availability:
-          </p>
-          <div style={{ padding: "0.75rem", background: "rgba(0,0,0,0.3)", borderRadius: "8px", fontFamily: "var(--font-mono)", fontSize: "0.85rem" }}>
-            {serverStatus}
-          </div>
-        </div>
+      {/* Simulation Controls */}
+      <div style={{ marginBottom: "1.5rem" }}>
+        <SimulationControls onRunScenario={handleRunScenario} onReset={handleReset} />
+      </div>
 
-        <div className="glass-card">
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
-            <Wifi style={{ color: "#6366f1", width: "1.25rem", height: "1.25rem" }} />
-            <h3 style={{ fontSize: "1.1rem", fontWeight: "600" }}>Architecture Overview</h3>
-          </div>
-          <ul style={{ color: "var(--text-muted)", fontSize: "0.9rem", paddingLeft: "1.2rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            <li><strong>Core:</strong> ConnectionManager, IncarnationManager, PacketValidator</li>
-            <li><strong>Network:</strong> DelayEngine, ReorderEngine, DuplicateEngine</li>
-            <li><strong>Frontend:</strong> React + Vite Dashboard</li>
-            <li><strong>Protocol:</strong> Node.js `crypto.randomUUID()` (128-bit Incarnation ID)</li>
-          </ul>
-        </div>
-      </main>
+      {/* Analytics & Metrics */}
+      <div style={{ marginBottom: "1.5rem" }}>
+        <MetricsPanel comparisonData={comparisonData} />
+      </div>
+
+      {/* Grid: Connection Table & Tombstone Panel */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: "1.5rem", marginBottom: "1.5rem" }}>
+        <ConnectionTable connections={connections} />
+        <TombstonePanel tombstones={tombstones} />
+      </div>
+
+      {/* Packet Stream Timeline */}
+      <div>
+        <PacketTimeline packets={packets} />
+      </div>
     </div>
   );
 }
