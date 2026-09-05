@@ -55,31 +55,68 @@ The simulator introduces an explicit **128-bit Incarnation ID** (`crypto.randomU
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-### B. Data Model & Entity Structure
+### B. Entity-Relationship (ER) Diagram & Data Model
 
-```text
-+───────────────────────────────────+       +───────────────────────────────────+
-│            Connection             │       │              Packet               │
-+───────────────────────────────────+       +───────────────────────────────────+
-│ connectionId: String (PK)         │       │ packetId: String (PK)             │
-│ sourceIp: String                  │1    * │ sourceIp: String                  │
-│ sourcePort: Number                │───────│ sourcePort: Number                │
-│ destinationIp: String             │       │ destinationIp: String             │
-│ destinationPort: Number           │       │ destinationPort: Number           │
-│ incarnationId: UUIDv4 (128-bit)   │       │ connectionId: String (FK)         │
-│ state: Enum                       │       │ incarnationId: UUIDv4 (Inherited) │
-│   (NEW|CONNECTING|ESTABLISHED     │       │ sequenceNumber: Number            │
-│    |CLOSING|CLOSED)               │       │ payload: String                   │
-│ sequenceNumber: Number            │       │ createdAt: Timestamp              │
-│ createdAt: Timestamp              │       │ deliveryAt: Timestamp             │
-│ closedAt: Timestamp | Null        │       │ status: Enum                      │
-+───────────────────────────────────+       │   (CREATED|SENT|DELAYED|ACCEPTED  │
-                                            │    |REJECTED|BUFFERED|DUPLICATE)  │
-                                            │ rejectionReason: Enum | Null      │
-                                            │   (STALE_INCARNATION|UNKNOWN_CONN │
-                                            │    |INVALID_SEQUENCE)             │
-                                            +───────────────────────────────────+
+```mermaid
+erDiagram
+    INCARNATION {
+        string incarnationId PK "UUID v4 (128-bit)"
+        string shortId "First 8 hex chars (UI display)"
+        string createdAt "ISO 8601 Timestamp"
+        string status "ACTIVE | EXPIRED"
+    }
+
+    CONNECTION {
+        string connectionId PK "Unique Connection Identifier"
+        string sourceIp "Source IP Address (e.g. 10.0.0.1)"
+        int sourcePort "Source Ephemeral Transport Port"
+        string destinationIp "Destination IP Address (e.g. 10.0.0.2)"
+        int destinationPort "Destination Service Port"
+        string incarnationId FK "128-bit UUID Incarnation ID"
+        string state "NEW | CONNECTING | ESTABLISHED | CLOSING | CLOSED"
+        int sequenceNumber "Transport Sequence Counter"
+        string createdAt "ISO 8601 Timestamp"
+        string closedAt "ISO 8601 Timestamp or Null"
+    }
+
+    PACKET {
+        string packetId PK "Unique Packet Identifier (e.g. A1, B2)"
+        string sourceIp "Source IP Address"
+        int sourcePort "Source Transport Port"
+        string destinationIp "Destination IP Address"
+        int destinationPort "Destination Transport Port"
+        string connectionId FK "Generating Connection ID"
+        string incarnationId FK "Inherited 128-bit UUID Incarnation ID"
+        int sequenceNumber "Transport Sequence Number"
+        string payload "Simulated Packet Payload"
+        string createdAt "Creation Timestamp"
+        string deliveryAt "Delivery Timestamp or Null"
+        string status "CREATED | SENT | DELAYED | RELEASED | ACCEPTED | REJECTED | BUFFERED | DUPLICATE | DROPPED"
+        string rejectionReason "STALE_INCARNATION | UNKNOWN_CONNECTION | INVALID_SEQUENCE"
+    }
+
+    TOMBSTONE {
+        string tombstoneId PK "Unique Tombstone Identifier"
+        string tupleKey "Canonical 4-Tuple Key"
+        string oldIncarnationId FK "Incarnation ID of Closed Connection"
+        int lastSequence "Final Sequence Number Before Close"
+        string closedAt "Closure Timestamp"
+        string expiresAt "Tombstone Expiry Timestamp"
+    }
+
+    INCARNATION ||--|| CONNECTION : "binds to connection lifetime"
+    CONNECTION ||--o{ PACKET : "generates packet sequence"
+    CONNECTION ||--o| TOMBSTONE : "creates upon closure"
 ```
+
+#### Primary Entity Definitions
+
+| Entity | Description | Key Attributes |
+|---|---|---|
+| **Incarnation** | Represents a single connection generation lifetime. | `incarnationId` (128-bit UUID v4), `shortId`, `status` |
+| **Connection** | Simulated transport connection endpoint state. | `connectionId`, 4-Tuple (`sourceIp`, `sourcePort`, `destinationIp`, `destinationPort`), `incarnationId`, `state` |
+| **Packet** | Simulated transport packet carrying generation identity. | `packetId`, `incarnationId` (inherited), `sequenceNumber`, `status`, `rejectionReason` |
+| **Tombstone** | Historical record retained after connection teardown to detect late-arriving packets during rapid reuse. | `tombstoneId`, `tupleKey`, `oldIncarnationId`, `lastSequence`, `expiresAt` |
 
 ### C. Deterministic Incarnation Isolation Sequence
 
