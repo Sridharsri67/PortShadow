@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: portshadow-api
+    env: node
+    region: oregon
+    buildCommand: npm install && npx prisma generate --schema=server/prisma/schema.prisma
+    startCommand: npm run start --workspace=server
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: CLIENT_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false

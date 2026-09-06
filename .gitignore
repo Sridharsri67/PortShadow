@@ -1,0 +1,40 @@
+# Dependency directories
+node_modules/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+server/.env
+client/.env
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+*.tsbuildinfo
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Logs and debugging
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Deployment & IDE directories
+.vercel/
+.render/
+.vscode/
+.idea/
+
+# Agent scratch & collection files
+scratch/
+AGENT.md
+collection.json
+collection.js
+collection*
