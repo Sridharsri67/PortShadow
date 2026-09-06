@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const API_BASE_URL = "/api";
+const BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/$/, "") : "";
+const API_BASE_URL = `${BASE_URL}/api`;
 
 // Intercept errors to extract clean backend error messages
 axios.interceptors.response.use(

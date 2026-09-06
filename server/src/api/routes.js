@@ -42,8 +42,17 @@ router.get("/connections", (req, res) => {
   res.json(connectionManager.getActiveConnections());
 });
 
-router.get("/connections/all", (req, res) => {
-  res.json(connectionManager.getAllConnections());
+router.get("/connections/all", async (req, res) => {
+  try {
+    const dbConns = await ConnectionRepository.getAllConnections(100);
+    const memConns = connectionManager.getAllConnections().map(c => c.toJSON());
+    const connMap = new Map();
+    dbConns.forEach(c => connMap.set(c.connectionId, c));
+    memConns.forEach(c => connMap.set(c.connectionId, c));
+    res.json(Array.from(connMap.values()));
+  } catch (err) {
+    res.json(connectionManager.getAllConnections());
+  }
 });
 
 router.get("/connections/:id", (req, res) => {
@@ -56,14 +65,15 @@ router.get("/connections/:id", (req, res) => {
 
 router.post("/connections", (req, res) => {
   try {
-    const { connectionId, sourceIp, sourcePort, destinationIp, destinationPort, autoEstablish } = req.body;
+    const { connectionId, sourceIp, sourcePort, destinationIp, destinationPort, autoEstablish, forceReuse } = req.body;
     const connection = connectionManager.createConnection({
       connectionId,
       sourceIp,
       sourcePort,
       destinationIp,
       destinationPort,
-      autoEstablish
+      autoEstablish,
+      forceReuse
     });
     res.status(201).json(connection);
   } catch (err) {
@@ -115,8 +125,17 @@ router.get("/tombstones/:id", (req, res) => {
 // PACKETS API
 // ----------------------------------------------------
 
-router.get("/packets", (req, res) => {
-  res.json(packetEngine.getAllPackets());
+router.get("/packets", async (req, res) => {
+  try {
+    const dbPackets = await PacketEventRepository.getProvenanceRecords({}, 100);
+    const memPackets = packetEngine.getAllPackets().map(p => (typeof p.toJSON === "function" ? p.toJSON() : p));
+    const pktMap = new Map();
+    dbPackets.forEach(p => pktMap.set(p.packetId, p));
+    memPackets.forEach(p => pktMap.set(p.packetId, p));
+    res.json(Array.from(pktMap.values()));
+  } catch (err) {
+    res.json(packetEngine.getAllPackets());
+  }
 });
 
 router.get("/packets/connection/:connectionId", (req, res) => {
@@ -144,6 +163,24 @@ router.post("/packets", (req, res) => {
       packetId,
       payload,
       status: status || PACKET_STATUS.SENT
+    });
+
+    PacketEventRepository.recordPacketEvent({
+      packetId: packet.packetId,
+      connectionId: packet.connectionId,
+      incarnationId: packet.incarnationId,
+      generation: packet.generation || 1,
+      sequenceNumber: packet.sequenceNumber,
+      sourceIp: packet.sourceIp,
+      sourcePort: packet.sourcePort,
+      destinationIp: packet.destinationIp,
+      destinationPort: packet.destinationPort,
+      payload: packet.payload,
+      eventType: "INJECTION",
+      status: packet.status,
+      createdAt: packet.createdAt
+    }).catch((err) => {
+      console.error("❌ [DB ERROR] Failed to record packet event:", err.message);
     });
 
     res.status(201).json(packet);

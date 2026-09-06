@@ -5,7 +5,8 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "build": "npx prisma generate --schema=prisma/schema.prisma || npx prisma generate --schema=server/prisma/schema.prisma",
+    "dev": "nodemon src/server.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -14,5 +15,8 @@
     "express": "^4.19.2",
     "prisma": "^5.22.0",
     "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

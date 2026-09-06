@@ -10,7 +10,8 @@ export function useSocket() {
   const addPacketEvent = useSimulationStore((state) => state.addPacketEvent);
 
   useEffect(() => {
-    const socketIo = io("/", {
+    const socketUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/$/, "") : "/";
+    const socketIo = io(socketUrl, {
       transports: ["websocket", "polling"],
       reconnectionAttempts: 5
     });

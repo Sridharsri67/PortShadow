@@ -21,9 +21,11 @@ export function CreateConnectionModal({ isOpen, onClose }) {
 
   const handleEstablish = async (e, mode = "normal") => {
     if (e) e.preventDefault();
+    if (loading) return;
     setLoading(true);
+
     try {
-      // 1. Create Connection with forceReuse enabled by default so repeated ports automatically teardown old state
+      // 1. Create Connection with forceReuse enabled so repeated ports automatically teardown old state
       const conn = await createConnection({
         connectionId: connectionId.trim() || undefined,
         sourceIp: sourceIp.trim() || "10.0.0.1",
@@ -37,27 +39,32 @@ export function CreateConnectionModal({ isOpen, onClose }) {
       addToast(`Connection Bound: ${conn.connectionId} (${conn.sourceIp}:${conn.sourcePort} → ${conn.destinationIp}:${conn.destinationPort})`, "success");
 
       // 2. Optional Payload Injection / Delay
-      if (mode === "delay" || shouldDelay || payload.trim()) {
-        const pktId = `P-${Math.floor(100 + Math.random() * 900)}`;
-        const pkt = await sendPacket({
-          connectionId: conn.connectionId,
-          packetId: pktId,
-          payload: payload.trim() || "TEST_DATA_PAYLOAD",
-          status: "SENT"
-        });
+      if (mode === "delay" || (payload && payload.trim().length > 0)) {
+        try {
+          const pktId = `P-${Math.floor(100 + Math.random() * 900)}`;
+          const pkt = await sendPacket({
+            connectionId: conn.connectionId,
+            packetId: pktId,
+            payload: payload.trim(),
+            status: "SENT"
+          });
 
-        if (mode === "delay" || shouldDelay) {
-          await transmitNetworkPacket(pkt.packetId, { delayMs: parseInt(delayMs, 10) || 5000 });
-          addToast(`🕒 Packet ${pkt.packetId} ("${pkt.payload}") DELAYED in queue for ${delayMs}ms for Port Reuse Testing!`, "warning");
-        } else {
-          addToast(`Packet ${pkt.packetId} ("${pkt.payload}") injected on Incarnation ${conn.incarnationId.slice(0, 8)}`, "info");
+          if (mode === "delay") {
+            await transmitNetworkPacket(pkt.packetId, { delayMs: parseInt(delayMs, 10) || 5000 });
+            addToast(`🕒 Packet ${pkt.packetId} ("${pkt.payload}") DELAYED in queue for ${delayMs}ms for Port Reuse Testing!`, "warning");
+          } else {
+            addToast(`Packet ${pkt.packetId} ("${pkt.payload}") injected on Incarnation ${conn.incarnationId.slice(0, 8)}`, "info");
+          }
+        } catch (pktErr) {
+          console.warn("Packet injection notice:", pktErr.message);
         }
       }
 
+      // 3. Always close modal when connection creation succeeds
       onClose();
-      // Reset defaults for next trigger
+      // Reset default values for next open
       setConnectionId(`conn-user-${Math.floor(100 + Math.random() * 900)}`);
-      setPayload("CONFIDENTIAL_PAYLOAD_101");
+      setPayload("");
     } catch (err) {
       addToast(`Failed to create connection: ${err.message}`, "error");
     } finally {

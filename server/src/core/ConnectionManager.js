@@ -45,9 +45,13 @@ export class ConnectionManager {
 
     if (this.activeConnections.has(tupleKey)) {
       const existing = this.activeConnections.get(tupleKey);
-      throw new Error(
-        `Active connection already exists for tuple ${tupleKey} (Connection ID: ${existing.connectionId})`
-      );
+      if (options.forceReuse) {
+        this.closeConnection(existing.connectionId);
+      } else {
+        throw new Error(
+          `Active connection already exists for tuple ${tupleKey} (Connection ID: ${existing.connectionId})`
+        );
+      }
     }
 
     const id = connectionId || `conn-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -76,7 +80,9 @@ export class ConnectionManager {
     this.allConnections.set(id, connection);
 
     broadcastEvent(SOCKET_EVENTS.CONNECTION_CREATED, connection.toJSON());
-    ConnectionRepository.recordConnectionCreated(connection.toJSON()).catch(() => {});
+    ConnectionRepository.recordConnectionCreated(connection.toJSON()).catch((err) => {
+      console.error("❌ [DB ERROR] Failed to record connection creation:", err.message);
+    });
 
     return connection;
   }
@@ -132,7 +138,9 @@ export class ConnectionManager {
       tombstone: tombstone ? tombstone.toJSON() : null
     });
 
-    ConnectionRepository.recordConnectionClosed(connectionId).catch(() => {});
+    ConnectionRepository.recordConnectionClosed(connectionId).catch((err) => {
+      console.error("❌ [DB ERROR] Failed to record connection teardown:", err.message);
+    });
 
     return connection;
   }

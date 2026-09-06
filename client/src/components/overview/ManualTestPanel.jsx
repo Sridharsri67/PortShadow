@@ -49,7 +49,8 @@ export function ManualTestPanel() {
         sourcePort: Number(sourcePort),
         destinationIp: destIp,
         destinationPort: Number(destPort),
-        autoEstablish: true
+        autoEstablish: true,
+        forceReuse: true
       });
       addToast(`Connection ${conn.connectionId} created with Incarnation ID: ${conn.incarnationId.slice(0, 8)}`, "success");
       setConnId(`conn-user-${Math.floor(Math.random() * 1000)}`);

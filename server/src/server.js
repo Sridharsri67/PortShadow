@@ -25,6 +25,10 @@ app.use("/api", routes);
 // WebSocket Setup
 const io = setupSocket(server, CLIENT_URL);
 
+// Serve static client assets in production
+const clientDistPath = path.resolve(__dirname, "../../client/dist");
+app.use(express.static(clientDistPath));
+
 // Basic health check
 app.get("/health", (req, res) => {
   res.json({
@@ -34,9 +38,26 @@ app.get("/health", (req, res) => {
   });
 });
 
+// SPA wildcard fallback for frontend routes
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api") || req.path.startsWith("/health")) {
+    return next();
+  }
+  res.sendFile(path.join(clientDistPath, "index.html"), (err) => {
+    if (err) {
+      res.status(404).send("Front-end build not found. Run 'npm run build' first.");
+    }
+  });
+});
+
+import { getPrismaClient } from "./database/client.js";
+
 if (process.env.NODE_ENV !== "test") {
   server.listen(PORT, () => {
     console.log(`[PortShadow Server] Listening on http://localhost:${PORT}`);
+    getPrismaClient().catch((err) => {
+      console.warn("⚠️ [PortShadow DB] Startup connection check deferred:", err.message);
+    });
   });
 }
 
