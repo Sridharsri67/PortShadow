@@ -1,0 +1,114 @@
+// PortShadow Prisma Schema for Neon PostgreSQL
+// Stores historical Packet Provenance, Connection Lifecycle, Scenario Runs, and Benchmark Results
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ConnectionState {
+  NEW
+  CONNECTING
+  ESTABLISHED
+  CLOSING
+  CLOSED
+}
+
+enum PacketStatus {
+  CREATED
+  SENT
+  DELAYED
+  ACCEPTED
+  REJECTED
+  BUFFERED
+  DROPPED
+  DUPLICATE
+}
+
+model Connection {
+  id              String          @id @default(uuid())
+  connectionId    String
+  sourceIp        String          @default("10.0.0.1")
+  sourcePort      Int             @default(5000)
+  destinationIp   String          @default("10.0.0.2")
+  destinationPort Int             @default(8080)
+  incarnationId   String
+  generation      Int             @default(1)
+  state           ConnectionState @default(ESTABLISHED)
+  sequenceNumber  Int             @default(100)
+  tupleKey        String
+  createdAt       DateTime        @default(now())
+  closedAt        DateTime?
+
+  packetEvents    PacketEvent[]
+
+  @@index([connectionId])
+  @@index([incarnationId])
+  @@index([generation])
+  @@index([tupleKey])
+  @@map("connections")
+}
+
+model PacketEvent {
+  id              String       @id @default(uuid())
+  packetId        String
+  connectionId    String
+  incarnationId   String
+  generation      Int          @default(1)
+  sequenceNumber  Int
+  sourceIp        String       @default("10.0.0.1")
+  sourcePort      Int          @default(5000)
+  destinationIp   String       @default("10.0.0.2")
+  destinationPort Int          @default(8080)
+  payload         String?
+  eventType       String       @default("VALIDATION")
+  status          PacketStatus
+  rejectionReason String?
+  networkDelay    Int          @default(0)
+  createdAt       DateTime     @default(now())
+  deliveredAt     DateTime?
+
+  connectionRef   Connection?  @relation(fields: [connectionIdRef], references: [id])
+  connectionIdRef String?
+
+  @@index([packetId])
+  @@index([connectionId])
+  @@index([incarnationId])
+  @@index([status])
+  @@index([rejectionReason])
+  @@map("packet_events")
+}
+
+model ScenarioRun {
+  id              String   @id @default(uuid())
+  scenarioName    String
+  startedAt       DateTime @default(now())
+  completedAt     DateTime @default(now())
+  totalPackets    Int      @default(0)
+  acceptedPackets Int      @default(0)
+  rejectedPackets Int      @default(0)
+  stalePackets    Int      @default(0)
+  duplicates      Int      @default(0)
+  outOfOrder      Int      @default(0)
+  summary         String?  @db.Text
+
+  @@index([scenarioName])
+  @@index([startedAt])
+  @@map("scenario_runs")
+}
+
+model BenchmarkResult {
+  id             String   @id @default(uuid())
+  packetCount    Int
+  durationMs     Float
+  throughput     Float
+  averageLatency Float
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("benchmark_results")
+}
